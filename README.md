@@ -2,7 +2,7 @@
 
 ## About
 
-Little gaming overlay daemon. Collects stats from machine, collates it to JSON.
+Little C gaming overlay daemon. Collects stats from machine, collates it to JSON.
 Will personally use with waybar but can ideally be reused anywhere.
 
 ## Primitves
