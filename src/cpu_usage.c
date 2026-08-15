@@ -1,21 +1,41 @@
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include "cpu_usage.h"
 
 static int stat_fd = -1;
-static void close_stat_fd() {
+static void close_stat_fd(void) {
     close(stat_fd);
 }
 
-int cpu_usage() {
+
+// Parses `start` upto the first `target` or the end of the buffer, whichever comes first
+char *seek_char(const char* start, const int len, const char target) {
+	char *out = (char*)start;
+	while ((out - start < len) && *(out++) != target);
+	return (*(--out) != target) ? NULL : out;
+}
+
+
+// Parses `start` upto the first digit or the end of the buffer, whichever comes first
+char *seek_digit(const char* start, const int len) {
+	char *out = (char*)start;
+	while ((out - start < len) && (*out < '0' || *out > '9')) out++;
+	return (*out < '0' || *out > '9') ? NULL : out;
+}
+
+
+float cpu_usage(void) {
 	// 1 - parse upto newline exclusive (char[1000] as buffer, check for overflow)
 	// 2 - repeatedly parse upto each space (10 fields, last 2 are VM specific, not necessary)
 	// 3 - sum = total time. 4th field = idle time
 	// 4 - usage = change in non-idle / change in total
-#define BUF_SIZE 200
-	static char buf[BUF_SIZE];
+#define INP_SIZE 200
+#define OUT_LEN 8
+	static char inp[INP_SIZE];
+	static uint64_t out[8], old_total = 0, old_idle = 0;
 
 	if (stat_fd < 0) {
 		stat_fd = open("/proc/stat", O_RDONLY);
@@ -24,8 +44,8 @@ int cpu_usage() {
 	}
 	
 	int read_bytes = 0;
-	while (read_bytes < BUF_SIZE) {
-		int tmp = read(stat_fd, buf + read_bytes, BUF_SIZE - read_bytes);
+	while (read_bytes < INP_SIZE) {
+		int tmp = read(stat_fd, inp + read_bytes, INP_SIZE - read_bytes);
 		if (tmp < 0) {
 			perror("read");
 			return -ERR_CPU_USAGE_READ;
@@ -33,15 +53,47 @@ int cpu_usage() {
 		read_bytes += tmp;
 	}
 
-	char *buf_end = buf;
 
-	while ((buf_end - buf < BUF_SIZE) && *(buf_end++) != '\n');
-	if (*--buf_end != '\n') return -ERR_CPU_USAGE_NEWL;
+	char *buf_end = seek_char(inp, INP_SIZE, '\n');
+	if (buf_end == NULL) return -ERR_CPU_USAGE_NEWL;
 
-	if (buf_end + 1 - buf < BUF_SIZE) *(buf_end+1) = '\0';
-	printf("%s", buf);
+	char *buf_start = seek_digit(inp, INP_SIZE);
+	if (buf_start == NULL) return -ERR_CPU_USAGE_STRT;
+
+	int out_index = 0;
+	while (buf_start < buf_end && out_index < OUT_LEN) {
+		char *num_end = seek_char(buf_start, (int)(buf_end - buf_start), ' ');
+		if (num_end == NULL) num_end = buf_end;
+		char *tmp = num_end;
+
+		uint64_t num = 0, i = 1;
+		while (tmp != buf_start) {
+			tmp--;
+			num += i * (*tmp - '0');
+			i *= 10;
+		}
+
+		out[out_index++] = num;
+		buf_start = num_end + 1;
+	}
+
+	if (out_index != OUT_LEN) return -ERR_CPU_USAGE_OUT;
+
+	uint64_t total = 0, idle = out[3];
+	for (int i = 0; i < OUT_LEN; i++) total += out[i];
+
+	if (old_total == 0 || old_idle == 0) {
+		old_total = total; old_idle = idle;
+		return -ERR_CPU_USAGE_SAMPLE;
+	}
+
+	uint64_t diff_total = total - old_total;
+    uint64_t diff_idle = idle - old_idle;
+    old_total = total; old_idle = idle;
 
 	lseek(stat_fd, 0, SEEK_SET);
-	return 0;
-#undef BUF_SIZE
+	return 1 - (float)diff_idle / (float)diff_total;
+
+#undef OUT_LEN
+#undef INP_SIZE
 }
