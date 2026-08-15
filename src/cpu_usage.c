@@ -19,7 +19,7 @@ int cpu_usage() {
 
 	if (stat_fd < 0) {
 		stat_fd = open("/proc/stat", O_RDONLY);
-		if (stat_fd < 0) { perror("open"); return ERR_CPU_USAGE_OPEN; }
+		if (stat_fd < 0) { perror("open"); return -ERR_CPU_USAGE_OPEN; }
 		atexit(close_stat_fd);
 	}
 	
@@ -28,7 +28,7 @@ int cpu_usage() {
 		int tmp = read(stat_fd, buf + read_bytes, BUF_SIZE - read_bytes);
 		if (tmp < 0) {
 			perror("read");
-			return ERR_CPU_USAGE_READ;
+			return -ERR_CPU_USAGE_READ;
 		}
 		read_bytes += tmp;
 	}
@@ -36,7 +36,7 @@ int cpu_usage() {
 	char *buf_end = buf;
 
 	while ((buf_end - buf < BUF_SIZE) && *(buf_end++) != '\n');
-	if (*--buf_end != '\n') return ERR_CPU_USAGE_NEWL;
+	if (*--buf_end != '\n') return -ERR_CPU_USAGE_NEWL;
 
 	if (buf_end + 1 - buf < BUF_SIZE) *(buf_end+1) = '\0';
 	printf("%s", buf);

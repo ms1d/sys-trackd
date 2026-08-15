@@ -4,7 +4,7 @@
 
 int main() {
 	for(;;) {
-		printf("%d\n", cpu_usage());
+		cpu_usage();
 	}
 
 	return 1;
