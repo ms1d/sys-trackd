@@ -1,9 +1,9 @@
-# gaming-overlay
+# sys-trackd
 
 ## About
 
-Little C gaming overlay daemon. Collects stats from machine, collates it to
-JSON (or another standard output, not decided). Will personally use with waybar
+Lightweight C system resource tracking daemon. Collects stats from machine, collates
+it to JSON (or another standard output, not decided). Will personally use with waybar
 but can ideally be reused anywhere.
 
 ## Primitves
