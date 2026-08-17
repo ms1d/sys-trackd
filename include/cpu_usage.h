@@ -1,6 +1,6 @@
 #pragma once
 
-//Error codes for cpu_usage:
+// Error codes for cpu_usage:
 
 // General error code
 #define ERR_CPU_USAGE_GEN  1
