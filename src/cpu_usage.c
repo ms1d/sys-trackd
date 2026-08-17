@@ -39,17 +39,17 @@ float cpu_usage(void) {
 	}
 
 
-	char *buf_end = seek_char(inp, INP_SIZE, '\n');
+	const char *buf_end = seek_char(inp, INP_SIZE, '\n');
 	if (buf_end == NULL) return -ERR_CPU_USAGE_NEWL;
 
-	char *buf_start = seek_digit(inp, INP_SIZE);
+	const char *buf_start = seek_digit(inp, INP_SIZE);
 	if (buf_start == NULL) return -ERR_CPU_USAGE_STRT;
 
 	int out_index = 0;
 	while (buf_start < buf_end && out_index < OUT_LEN) {
-		char *num_end = seek_char(buf_start, (int)(buf_end - buf_start), ' ');
+		const char *num_end = seek_char(buf_start, (int)(buf_end - buf_start), ' ');
 		if (num_end == NULL) num_end = buf_end;
-		char *tmp = num_end;
+		const char *tmp = num_end;
 
 		uint64_t num = 0, i = 1;
 		while (tmp != buf_start) {
