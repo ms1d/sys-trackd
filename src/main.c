@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include "cpu_usage.h"
 #include "mem_usage.h"
@@ -30,12 +31,22 @@ void cpu_temp_loop(void) {
 
 void cpu_freq_loop(void) {
 	for (;;) {
-		printf("%f\n", cpu_freq());
+		printf("%f\n", cpu_freq() / 1000000);
 		usleep(100000);
 	}
 }
 
-int main(void) {
-	cpu_freq_loop();
-	return 0;
+int main(int argc, char **argv) {
+	if (argc != 2) {
+		printf("Ignoring args...\n"); return 1;
+	}
+	if (strcmp(argv[1], "-u") == 0) {
+		cpu_usage_loop(); return 0;
+	} else if (strcmp(argv[1], "-m") == 0) {
+		mem_usage_loop(); return 0;
+	} else if (strcmp(argv[1], "-t") == 0) {
+		cpu_temp_loop(); return 0;
+	} else if (strcmp(argv[1], "-f") == 0) {
+		cpu_freq_loop(); return 0;
+	} else { printf("Unknown arg\n"); return 1; }
 }
