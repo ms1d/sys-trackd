@@ -15,8 +15,8 @@ void close_temp_fd(void) {
 float cpu_temp(void) {
 	if (temp_fd < 0) {
 		DIR *root = opendir("/sys/class/hwmon");
+		if (root == NULL) return -ERR_CPU_TEMP_ROOT;
 		char path_to_temp[64];
-		if (root == NULL) return -ERR_CPU_TEMP_OPEN;
 
 		struct dirent *entry;
 		while ((entry = readdir(root)) != NULL) {
@@ -27,7 +27,7 @@ float cpu_temp(void) {
 			int base_len = 17 + strlen(entry->d_name);
 
 			DIR *sub_root = opendir(sub_entry_path);
-			if (sub_root == NULL) continue;
+			if (sub_root == NULL) return -ERR_CPU_TEMP_SBRT;
 			
 			struct dirent *sub_entry, *temp_entry = NULL;
 			while ((sub_entry = readdir(sub_root)) != NULL) {
@@ -40,7 +40,7 @@ float cpu_temp(void) {
 				memcpy(sub_entry_path + base_len + 1, sub_entry->d_name, strlen(sub_entry->d_name));
 
 				int fd = open(sub_entry_path, O_RDONLY);
-				if (fd < 0) continue;
+				if (fd < 0) return -ERR_CPU_TEMP_OPEN;
 
 				char buffer[32];
 				int read_bytes = 0;
@@ -50,6 +50,8 @@ float cpu_temp(void) {
 					if (tmp == 0) break;
 					read_bytes += tmp;
 				}
+
+				close(fd);
 
 				// Looking for k10temp/zenpower (amd) or coretemp (intel)
 				// Lazy method
@@ -72,7 +74,7 @@ float cpu_temp(void) {
         closedir(root);
 		temp_fd = open(path_to_temp, O_RDONLY);
 
-		if (temp_fd < 0) return -ERR_CPU_TEMP_OPEN;
+		if (temp_fd < 0) return -ERR_CPU_TEMP_NFD;
 		atexit(close_temp_fd);
 	}
 
