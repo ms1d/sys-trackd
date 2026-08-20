@@ -16,12 +16,14 @@ void cpu_usage_loop(void) {
 void mem_usage_loop(void) {
 	for (;;) {
 		printf("%f\n", mem_usage());
+		usleep(100000);
 	}
 }
 
 void cpu_temp_loop(void) {
     for (;;) {
         printf("%f\n", cpu_temp() / 1000);
+		usleep(100000);
     }
 }
 
