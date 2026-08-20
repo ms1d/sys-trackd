@@ -3,6 +3,7 @@
 #include "cpu_usage.h"
 #include "mem_usage.h"
 #include "cpu_temp.h"
+#include "cpu_freq.h"
 
 void cpu_usage_loop(void) {
 	for(;;) {
@@ -27,7 +28,14 @@ void cpu_temp_loop(void) {
     }
 }
 
+void cpu_freq_loop(void) {
+	for (;;) {
+		printf("%f\n", cpu_freq());
+		usleep(100000);
+	}
+}
+
 int main(void) {
-	cpu_temp_loop();
-	return 1;
+	cpu_freq_loop();
+	return 0;
 }
