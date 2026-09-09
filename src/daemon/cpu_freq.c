@@ -72,7 +72,7 @@ float cpu_freq(void) {
 		}
 
 		int power = 1, num = 0;
-		for (int j = 15; j > -1; j--) {
+		for (int j = read_bytes - 1; j > -1; j--) {
 			int dig = buffer[j] - '0';
 			if (dig < 0 || dig > 9) continue;
 			num += power * dig;
