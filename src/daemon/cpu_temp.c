@@ -88,7 +88,7 @@ float cpu_temp(void) {
 	}
 
 	int res = 0, power = 1;
-	for (int i = read_bytes - 1; i > -1; i--) {
+	for (int i = read_bytes; i > -1; i--) {
 		int dig = temp_buffer[i] - '0';
 		if (dig > 9 || dig < 0) continue;
 		res += power * dig;
