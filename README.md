@@ -15,17 +15,31 @@ but can ideally be reused anywhere.
 
 ## Benchmarks
 
-All runs were done on a Ryzen 7 8845HS (single threaded). Times do **NOT**
-include daemon startup. `hyperfine` with 50k runs and no shell was used to record
-this data. The significant variance in the data is due to the incredible short-lived
-nature of each run.
+All runs were done on a Ryzen 7 8845HS (single threaded). Times do **NOT** include
+daemon startup. `hyperfine` with 100k runs (+ 10k warmup runs) and no shell was
+used to record this data. The significant variance in the data is due to the incredibly
+short-lived nature of each run. The first table displays the results from omitting
+`-DENABLE_CACHE` flag (default); the latter displays the results when it was introduced.
 
 | Name | Avg Time ± S.D. (us) | Range in Time (us) |
 | ---- | -------------------- | ------------------ |
-| cpu usage | 600.6 ± 138.1 | 322.6 ... 2162.2 |
-| mem usage | 511.7 ± 138.9 | 313.7 ... 2708.4 |
-| cpu temps | 583.9 ± 129.2 | 314.6 ... 2129.0 |
-| cpu freqs | 616.4 ± 132.0 | 330.7 ... 2099.5 |
+| cpu usage | 682.1 ± 107.5 | 333.9 ... 2180.2 |
+| mem usage | 640.1 ± 112.9 | 323.1 ... 2063.8 |
+| cpu temps | 738.1 ± 104.6 | 378.9 ... 2386.2 |
+| cpu freqs | 1116.8 ± 140.2 | 620.8 ... 3066.6 |
+
+| Name | Avg Time ± S.D. (us) | Range in Time (us) | Avg. Time speedup |
+| ---- | -------------------- | ------------------ | ----------------- |
+| cpu usage | 674.9 ± 110.3 | 338.4 ... 2171.1 | 1.01x |
+| mem usage | 626.2 ± 117.5 | 308.5 ... 2186.2 | 1.02x |
+| cpu temps | 582.1 ± 139.3 | 313.1 ... 2614.7 | 1.27x |
+| cpu freqs | 674.9 ± 111.1 | 337.8 ... 2132.8 | 1.65x |
+
+Caching file descriptors had negligible impact on relatively simple metrics such
+as CPU and RAM utilisation; CPU Temps and Freqs involve a much more aggressive filesystem
+traversal process, and this cost adds upto nearly half a millisecond on average.
+Caching allows the more expensive metrics to be collected just as quickly, if not
+faster, than the others.
 
 ## Limitations
 
