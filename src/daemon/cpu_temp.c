@@ -85,7 +85,6 @@ float cpu_temp(void) {
 
         closedir(root);
 		temp_fd = open(path_to_temp, O_RDONLY);
-		printf("%s\n", path_to_temp);
 
 		if (temp_fd < 0) return -ERR_CPU_TEMP_NFD;
 	}
