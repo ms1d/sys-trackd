@@ -1,15 +1,11 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 #include "cpu_usage.h"
 #include "parsers.h"
 
 static int stat_fd = -1;
-static void close_stat_fd(void) {
-    close(stat_fd);
-}
 
 
 float cpu_usage(void) {
@@ -25,25 +21,36 @@ float cpu_usage(void) {
 	if (stat_fd < 0) {
 		stat_fd = open("/proc/stat", O_RDONLY);
 		if (stat_fd < 0) { perror("open"); return -ERR_CPU_USAGE_OPEN; }
-		atexit(close_stat_fd);
 	}
 	
 	int read_bytes = 0;
 	while (read_bytes < INP_SIZE) {
 		int tmp = read(stat_fd, inp + read_bytes, INP_SIZE - read_bytes);
+
 		if (tmp < 0) {
 			perror("read");
+			close(stat_fd);
+			stat_fd = -1;
 			return -ERR_CPU_USAGE_READ;
 		}
+		
 		read_bytes += tmp;
 	}
 
 
 	const char *buf_end = seek_char(inp, INP_SIZE, '\n');
-	if (buf_end == NULL) return -ERR_CPU_USAGE_NEWL;
+	if (buf_end == NULL) {
+		close(stat_fd);
+		stat_fd = -1;
+		return -ERR_CPU_USAGE_NEWL;
+	}
 
 	const char *buf_start = seek_digit(inp, INP_SIZE);
-	if (buf_start == NULL) return -ERR_CPU_USAGE_STRT;
+	if (buf_start == NULL) {
+		close(stat_fd);
+		stat_fd = -1;
+		return -ERR_CPU_USAGE_STRT;
+	}
 
 	int out_index = 0;
 	while (buf_start < buf_end && out_index < OUT_LEN) {
@@ -62,7 +69,11 @@ float cpu_usage(void) {
 		buf_start = num_end + 1;
 	}
 
-	if (out_index != OUT_LEN) return -ERR_CPU_USAGE_OUT;
+	if (out_index != OUT_LEN) {
+		close(stat_fd);
+		stat_fd = -1;
+		return -ERR_CPU_USAGE_OUT;
+	}
 
 	uint64_t total = 0, idle = out[3];
 	for (int i = 0; i < OUT_LEN; i++) total += out[i];
@@ -76,7 +87,12 @@ float cpu_usage(void) {
     uint64_t diff_idle = idle - old_idle;
     old_total = total; old_idle = idle;
 
+#ifdef ENABLE_CACHE
 	lseek(stat_fd, 0, SEEK_SET);
+#else
+	close(stat_fd);
+	stat_fd = -1;
+#endif
 	return 1 - (float)diff_idle / (float)diff_total;
 
 #undef OUT_LEN

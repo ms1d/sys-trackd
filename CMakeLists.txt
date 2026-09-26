@@ -12,6 +12,7 @@ target_compile_options(
 	sys-trackd
 	PRIVATE
 	-g -O3 -Wall -Wextra -Wpedantic -Werror
+	-DENABLE_CACHE
 )
 
 target_include_directories(sys-track PUBLIC include)

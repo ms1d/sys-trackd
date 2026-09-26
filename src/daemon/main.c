@@ -79,7 +79,7 @@ int main(void) {
 			out[0] = 1;
 			int res_int = (int)res;
 			memcpy(out + 1, &res_int, 4);
-			fprintf(stderr, "err byte set to %d\n", *(int*)(out+1));
+			fprintf(stderr, "err byte set to %d after operation %d\n", *(int*)(out+1), *(int*)buf);
 		}
 		else {
 			out[0] = 0;

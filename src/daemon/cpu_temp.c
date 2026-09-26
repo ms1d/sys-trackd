@@ -1,16 +1,12 @@
 #include "cpu_temp.h"
 #include <fcntl.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <dirent.h>
 
 
 static int temp_fd = -1;
-void close_temp_fd(void) {
-	close(temp_fd);
-}
 
 float cpu_temp(void) {
 	if (temp_fd < 0) {
@@ -27,7 +23,10 @@ float cpu_temp(void) {
 			int base_len = 17 + strlen(entry->d_name);
 
 			DIR *sub_root = opendir(sub_entry_path);
-			if (sub_root == NULL) return -ERR_CPU_TEMP_SBRT;
+			if (sub_root == NULL) {
+				closedir(root);
+				return -ERR_CPU_TEMP_SBRT;
+			}
 			
 			struct dirent *sub_entry, *temp_entry = NULL;
 			while ((sub_entry = readdir(sub_root)) != NULL) {
@@ -40,13 +39,25 @@ float cpu_temp(void) {
 				memcpy(sub_entry_path + base_len + 1, sub_entry->d_name, strlen(sub_entry->d_name));
 
 				int fd = open(sub_entry_path, O_RDONLY);
-				if (fd < 0) return -ERR_CPU_TEMP_OPEN;
+				if (fd < 0) {
+					closedir(sub_root);
+					closedir(root);
+					return -ERR_CPU_TEMP_OPEN;
+				}
 
 				char buffer[32];
 				int read_bytes = 0;
 				while (read_bytes < 32) {
 					int tmp = read(fd, buffer + read_bytes, 32 - read_bytes);
-					if (tmp < 0) { perror("read"); return -ERR_CPU_TEMP_READ; }
+
+					if (tmp < 0) {
+						perror("read");
+						close(fd);
+						closedir(sub_root);
+						closedir(root);
+						return -ERR_CPU_TEMP_READ;
+					}
+					
 					if (tmp == 0) break;
 					read_bytes += tmp;
 				}
@@ -63,6 +74,7 @@ float cpu_temp(void) {
 				memcpy(path_to_temp, sub_entry_path, base_len);
 				memcpy(path_to_temp + base_len, "/", 1);
 				memcpy(path_to_temp + base_len + 1, "temp1_input", strlen("temp1_input"));
+				memcpy(path_to_temp + base_len + 1 + strlen("temp1_input"), "\0", 1);
 			
 				closedir(sub_root);
 				break;
@@ -73,9 +85,9 @@ float cpu_temp(void) {
 
         closedir(root);
 		temp_fd = open(path_to_temp, O_RDONLY);
+		printf("%s\n", path_to_temp);
 
 		if (temp_fd < 0) return -ERR_CPU_TEMP_NFD;
-		atexit(close_temp_fd);
 	}
 
 	char temp_buffer[8];
@@ -83,18 +95,23 @@ float cpu_temp(void) {
 	while (read_bytes < 8) {
 		int tmp = read(temp_fd, temp_buffer + read_bytes, 8 - read_bytes);
 		if (tmp == 0) break;
-		if (tmp < 0) { perror("read"); return -ERR_CPU_TEMP_READ; }
+		if (tmp < 0) { perror("read"); close(temp_fd); temp_fd = -1; return -ERR_CPU_TEMP_READ; }
 		read_bytes += tmp;
 	}
 
 	int res = 0, power = 1;
-	for (int i = read_bytes; i > -1; i--) {
+	for (int i = read_bytes - 1; i > -1; i--) {
 		int dig = temp_buffer[i] - '0';
 		if (dig > 9 || dig < 0) continue;
 		res += power * dig;
 		power *= 10;
 	}
 
+#ifdef ENABLE_CACHE
 	lseek(temp_fd, 0, SEEK_SET);
+#else
+	close(temp_fd);
+	temp_fd = -1;
+#endif
 	return res;
 }
