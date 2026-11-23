@@ -23,6 +23,14 @@ int send_dat(int fd, const char* dat, const int len) {
 	return res;
 }
 
+int send_err(int fd, int dat) {
+	char buf[5];
+	buf[0] = 1;
+	memcpy(buf + 1, &dat, 4);
+	return send_dat(fd, buf, 5);
+}
+
+
 int main(void) {
 	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	struct sockaddr_un addr;
@@ -50,15 +58,12 @@ int main(void) {
 			int read_bytes = 0;
 			while (read_bytes < 4) {
 				int tmp = read(client_fd, buf + read_bytes, 4 - read_bytes);
-				if (tmp == 0) break;
-				if (tmp < 0) {
-					int err = -ERR_READ;
-					char buf[5]; buf[0] = 1; memcpy(buf + 1, &err, 4);
-					if (send_dat(client_fd, buf, 5) < 0) break;
-					continue;
-				}
+				if (tmp == 0) { send_err(client_fd, -ERR_BAD_LEN); break; }
+				if (tmp < 0) { send_err(client_fd, -ERR_READ); break; }
 				read_bytes += tmp;
 			}
+			
+			if (read_bytes != 4) break;
 		}
 
 		char out[5]; float res;

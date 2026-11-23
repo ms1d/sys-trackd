@@ -4,6 +4,7 @@
 
 #define ERR_READ	1
 #define ERR_BAD_OPT 2
+#define ERR_BAD_LEN 3
 
 
 
