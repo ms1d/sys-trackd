@@ -80,6 +80,7 @@ float cpu_usage(void) {
 
 	if (old_total == 0 || old_idle == 0) {
 		old_total = total; old_idle = idle;
+		lseek(stat_fd, 0, SEEK_SET);
 		return -ERR_CPU_USAGE_SAMPLE;
 	}
 
