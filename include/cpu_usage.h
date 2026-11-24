@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef CPU_USAGE_INTERVAL
+#define CPU_USAGE_INTERVAL 1
+#endif
+
 // Error codes for cpu_usage:
 
 // General error code

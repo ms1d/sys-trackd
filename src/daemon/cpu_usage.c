@@ -1,6 +1,8 @@
+#include <assert.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 #include <unistd.h>
 #include "cpu_usage.h"
 #include "parsers.h"
@@ -17,11 +19,17 @@ float cpu_usage(void) {
 #define OUT_LEN 8
 	static char inp[INP_SIZE];
 	static uint64_t out[8], old_total = 0, old_idle = 0;
+	static float old_res = 0;
+	static time_t old_t = 0;
 
 	if (stat_fd < 0) {
 		stat_fd = open("/proc/stat", O_RDONLY);
 		if (stat_fd < 0) { perror("open"); return -ERR_CPU_USAGE_OPEN; }
 	}
+
+	time_t new_t = time(NULL);
+	if (new_t - old_t < CPU_USAGE_INTERVAL) return old_res;
+	old_t = new_t;
 	
 	int read_bytes = 0;
 	while (read_bytes < INP_SIZE) {
@@ -79,7 +87,7 @@ float cpu_usage(void) {
 	for (int i = 0; i < OUT_LEN; i++) total += out[i];
 
 	if (old_total == 0 || old_idle == 0) {
-		old_total = total; old_idle = idle;
+		old_total = total; old_idle = idle; old_t = time(NULL);
 		lseek(stat_fd, 0, SEEK_SET);
 		return -ERR_CPU_USAGE_SAMPLE;
 	}
@@ -94,7 +102,8 @@ float cpu_usage(void) {
 	close(stat_fd);
 	stat_fd = -1;
 #endif
-	return 1 - (float)diff_idle / (float)diff_total;
+	old_res = 1 - (float)diff_idle / (float)diff_total;
+	return old_res;
 
 #undef OUT_LEN
 #undef INP_SIZE

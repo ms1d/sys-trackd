@@ -12,7 +12,7 @@ target_compile_options(
 	sys-trackd
 	PRIVATE
 	-g -O3 -Wall -Wextra -Wpedantic -Werror
-	-DENABLE_CACHE
+	-DENABLE_CACHE -DCPU_USAGE_INTERVAL=1
 )
 
 target_include_directories(sys-track PUBLIC include)
