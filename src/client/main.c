@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -43,7 +44,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	char res[5];
+	uint64_t res_storage;
+	char *res = (char*)&res_storage + 3;
 	{
 		int read_bytes = 0;
 		while (read_bytes < 5) {

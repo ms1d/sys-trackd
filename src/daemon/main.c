@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -24,7 +25,8 @@ int send_dat(int fd, const char* dat, const int len) {
 }
 
 int send_err(int fd, int dat) {
-	char buf[5];
+	uint64_t buf_storage;
+	char *buf = (char*)&buf_storage + 3;
 	buf[0] = 1;
 	memcpy(buf + 1, &dat, 4);
 	return send_dat(fd, buf, 5);
@@ -52,7 +54,8 @@ int main(void) {
 		int client_fd = accept(fd, NULL, NULL);
 		if (client_fd < 0) break;
 
-		char buf[4];
+		uint32_t buf_storage;
+		char *buf = (char*)&buf_storage;
 
 		{
 			int read_bytes = 0;
@@ -66,7 +69,8 @@ int main(void) {
 			if (read_bytes != 4) break;
 		}
 
-		char out[5]; float res;
+		uint64_t out_storage;
+		char *out = (char*)&out_storage + 3; float res;
 		switch (*(int*)buf) {
 			case OPT_CPU_USAGE:
 				res = cpu_usage(); break;
