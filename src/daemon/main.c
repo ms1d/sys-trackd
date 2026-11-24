@@ -66,7 +66,7 @@ int main(void) {
 				read_bytes += tmp;
 			}
 			
-			if (read_bytes != 4) break;
+			if (read_bytes != 4) continue;
 		}
 
 		uint64_t out_storage;
