@@ -1,5 +1,6 @@
 #include "mem_usage.h"
 #include "parsers.h"
+#include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -12,21 +13,23 @@ static int stat_fd = -1;
 
 float mem_usage(void) {
 #define INP_SIZE 200
-	static char inp[INP_SIZE];
+	static char inp[INP_SIZE] = {0};
 	if (stat_fd < 0) {
 		stat_fd = open("/proc/meminfo", O_RDONLY);
 		if (stat_fd < 0) { perror("open"); return -ERR_MEM_USAGE_OPEN; }
 	}
 
 	int read_bytes = 0;
-	while (read_bytes < INP_SIZE) {
-		int tmp = read(stat_fd, inp + read_bytes, INP_SIZE - read_bytes);
+	while (read_bytes < INP_SIZE - 1) {
+		ssize_t tmp = read(stat_fd, inp + read_bytes, INP_SIZE - 1 - read_bytes);
+		if (tmp == 0) break;
+		if (errno == EINTR) continue;
 		if (tmp < 0) { perror("read"); close(stat_fd); stat_fd = -1; return -ERR_MEM_USAGE_READ; }
 		read_bytes += tmp;
 	}
 
 	char *tot_start = inp;
-	const char *tot_end = seek_char(tot_start, INP_SIZE, '\n');
+	const char *tot_end = seek_char(tot_start, read_bytes, '\n');
 	if (tot_end == NULL) {
 		close(stat_fd);
 		stat_fd = -1;
@@ -36,7 +39,7 @@ float mem_usage(void) {
 	// MemFree is not necessary, but put here for explicitness
 	// Compiler will probably optimise this out
 	const char *free_start = tot_end + 1;
-	const char *free_end = seek_char(free_start, INP_SIZE - (free_start - inp), '\n');
+	const char *free_end = seek_char(free_start, read_bytes - (free_start - inp), '\n');
 	if (free_end == NULL) {
 		close(stat_fd);
 		stat_fd = -1;
@@ -44,7 +47,7 @@ float mem_usage(void) {
 	}
 
 	const char *avail_start = free_end + 1;
-	const char *avail_end = seek_char(avail_start, INP_SIZE - (avail_start - inp), '\n');
+	const char *avail_end = seek_char(avail_start, read_bytes - (avail_start - inp), '\n');
 	if (avail_end == NULL) {
 		close(stat_fd);
 		stat_fd = -1;
@@ -55,13 +58,13 @@ float mem_usage(void) {
 	uint64_t nums[2] = { 0, 0 };
 
 	for (int i = 0; i < 2; i++) {
-		const char *first_dig = seek_digit(starts[i], INP_SIZE - (starts[i] - inp));
+		const char *first_dig = seek_digit(starts[i], read_bytes - (starts[i] - inp));
 		if (first_dig == NULL) {
 			close(stat_fd);
 			stat_fd = -1;
 			return -ERR_MEM_USAGE_DIG;
 		}
-		const char *last_dig = seek_char(starts[i], INP_SIZE - (starts[i] - inp), 'k');
+		const char *last_dig = seek_char(starts[i], read_bytes - (starts[i] - inp), 'k');
 		if (last_dig == NULL) {
 			close(stat_fd);
 			stat_fd = -1;
