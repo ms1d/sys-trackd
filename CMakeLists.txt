@@ -17,7 +17,7 @@ target_compile_options(
 
 target_include_directories(sys-track PUBLIC include)
 target_compile_options(
-	sys-trackd
+	sys-track
 	PRIVATE
 	-g -O3 -Wall -Wextra -Wpedantic -Werror
 )
