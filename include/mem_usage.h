@@ -18,8 +18,5 @@
 #define ERR_MEM_USAGE_DIG 5
 
 
-// Returns number of kBs memory used
+// Returns fraction of system memory used
 float mem_usage(void);
-
-// Orchestrates mem_usage to return a percentage
-float mem_usage_rel(void);
