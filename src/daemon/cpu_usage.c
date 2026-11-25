@@ -28,7 +28,9 @@ float cpu_usage(void) {
 	}
 
 	time_t new_t = time(NULL);
-	if (new_t - old_t < CPU_USAGE_INTERVAL) return old_res;
+	if (new_t - old_t < CPU_USAGE_INTERVAL) {
+		return old_res == 0 ? -ERR_CPU_USAGE_SAMPLE : old_res;
+	}
 	old_t = new_t;
 	
 	int read_bytes = 0;
