@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
 	{
 		int send_bytes = 0;
 		while (send_bytes < 4) {
-			int tmp = send(fd, (void*)&choice + send_bytes, 4 - send_bytes, 0);
+			int tmp = send(fd, (char*)&choice + send_bytes, 4 - send_bytes, 0);
 			if (tmp <= 0) { perror("send"); close(fd); return 4; }
 			send_bytes += tmp;
 		}
