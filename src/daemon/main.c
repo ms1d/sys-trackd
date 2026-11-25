@@ -15,7 +15,7 @@
 int send_dat(int fd, const char* dat, const int len) {
 	int send_bytes = 0, res = 0;
 	while (send_bytes < len) {
-		int tmp = send(fd, dat + send_bytes, len - send_bytes, 0);
+		int tmp = send(fd, dat + send_bytes, len - send_bytes, MSG_NOSIGNAL);
 		if (tmp <= 0) { perror("send"); res = -1; break; }
 		send_bytes += tmp;
 	}
