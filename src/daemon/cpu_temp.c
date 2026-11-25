@@ -1,4 +1,5 @@
 #include "cpu_temp.h"
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,86 +7,79 @@
 #include <dirent.h>
 
 
+#define ROOT_PATH		"/sys/class/hwmon"
+#define PATH_BUFF_SIZE	64
 static int temp_fd = -1;
 
 float cpu_temp(void) {
 	if (temp_fd < 0) {
-		DIR *root = opendir("/sys/class/hwmon");
-		if (root == NULL) return -ERR_CPU_TEMP_ROOT;
-		char path_to_temp[64];
+		char found_temp = 0;
 
-		struct dirent *entry;
-		while ((entry = readdir(root)) != NULL) {
-			if (*entry->d_name == '.') continue;
-
-			char sub_entry_path[64] = "/sys/class/hwmon/";
-			memcpy(sub_entry_path + 17, entry->d_name, strlen(entry->d_name));
-			int base_len = 17 + strlen(entry->d_name);
-
-			DIR *sub_root = opendir(sub_entry_path);
-			if (sub_root == NULL) {
-				closedir(root);
-				return -ERR_CPU_TEMP_SBRT;
-			}
-			
-			struct dirent *sub_entry, *temp_entry = NULL;
-			while ((sub_entry = readdir(sub_root)) != NULL) {
-				const char *name = sub_entry->d_name;
-				if (*name == '.') continue;
-				
-				if (strcmp(name, "name") != 0) continue;
-
-				memcpy(sub_entry_path + base_len, "/", 1);
-				memcpy(sub_entry_path + base_len + 1, sub_entry->d_name, strlen(sub_entry->d_name));
-
-				int fd = open(sub_entry_path, O_RDONLY);
-				if (fd < 0) {
-					closedir(sub_root);
-					closedir(root);
-					return -ERR_CPU_TEMP_OPEN;
-				}
-
-				char buffer[32];
-				int read_bytes = 0;
-				while (read_bytes < 32) {
-					int tmp = read(fd, buffer + read_bytes, 32 - read_bytes);
-
-					if (tmp < 0) {
-						perror("read");
-						close(fd);
-						closedir(sub_root);
-						closedir(root);
-						return -ERR_CPU_TEMP_READ;
-					}
-					
-					if (tmp == 0) break;
-					read_bytes += tmp;
-				}
-
-				close(fd);
-
-				// Looking for k10temp/zenpower (amd) or coretemp (intel)
-				// Lazy method
-				if (*buffer == 'k' || *buffer == 'c' || *buffer == 'z') temp_entry = sub_entry;
-			}
-
-
-			if (temp_entry != NULL) {
-				memcpy(path_to_temp, sub_entry_path, base_len);
-				memcpy(path_to_temp + base_len, "/", 1);
-				memcpy(path_to_temp + base_len + 1, "temp1_input", strlen("temp1_input"));
-				memcpy(path_to_temp + base_len + 1 + strlen("temp1_input"), "\0", 1);
-			
-				closedir(sub_root);
-				break;
-			}
-
-			closedir(sub_root);
+		char path_to_temp[PATH_BUFF_SIZE] = ROOT_PATH;
+		DIR *root_dir = opendir(path_to_temp);
+		if (!root_dir) {
+			return -ERR_CPU_TEMP_ROOT;
 		}
 
-        closedir(root);
-		temp_fd = open(path_to_temp, O_RDONLY);
+		struct dirent *entry = NULL;
+		while ((entry = readdir(root_dir))) {
+			const char *name = entry->d_name;
+			if (name[0] == '.') continue;
 
+			int res = snprintf(
+				path_to_temp,
+				sizeof(path_to_temp),
+				ROOT_PATH"/%s/name", name
+			);
+
+			if (res < 0 || (size_t)res >= sizeof(path_to_temp)) {
+				closedir(root_dir);
+				return -ERR_CPU_TEMP_SPF;
+			}
+
+			int fd = open(path_to_temp, O_RDONLY);
+			if (fd < 0) {
+				continue;
+			}
+
+#define NAME_BUFF_LEN 16
+			char name_buffer[NAME_BUFF_LEN] = {0};
+			ssize_t read_bytes = 0;
+			while (read_bytes < NAME_BUFF_LEN - 1) { // allow 1 byte at the end for null termination
+				ssize_t tmp = read(fd, name_buffer + read_bytes, NAME_BUFF_LEN - 1 - read_bytes);
+				if (tmp == 0) break;
+				if (tmp < 0) {
+					if (errno == EINTR) continue;
+					close(fd);
+					closedir(root_dir);
+					return -ERR_CPU_TEMP_READ;
+				}
+				read_bytes += tmp;
+			}
+			close(fd);
+
+
+			if (strcmp(name_buffer, "k10temp\n") == 0 || strcmp(name_buffer, "coretemp\n") == 0 || strcmp(name_buffer, "zenpower\n") == 0 || strcmp(name_buffer, "k8temp\n") == 0) {
+				found_temp = 1;
+				res = snprintf(
+					path_to_temp,
+					sizeof(path_to_temp), 
+					ROOT_PATH"/%s/temp1_input",
+					name
+				);
+				if (res < 0 || (size_t)res >= sizeof(path_to_temp)) {
+					closedir(root_dir);
+					return -ERR_CPU_TEMP_SPF;
+				}
+				break;
+			}
+#undef NAME_BUFF_LEN
+		}
+
+		closedir(root_dir);
+
+		if (!found_temp) return -ERR_CPU_TEMP_NFD;
+		temp_fd = open(path_to_temp, O_RDONLY);
 		if (temp_fd < 0) return -ERR_CPU_TEMP_NFD;
 	}
 
@@ -94,8 +88,19 @@ float cpu_temp(void) {
 	while (read_bytes < 8) {
 		int tmp = read(temp_fd, temp_buffer + read_bytes, 8 - read_bytes);
 		if (tmp == 0) break;
-		if (tmp < 0) { perror("read"); close(temp_fd); temp_fd = -1; return -ERR_CPU_TEMP_READ; }
+		if (tmp < 0) {
+			if (errno == EINTR) continue;
+			perror("read");
+			close(temp_fd); temp_fd = -1;
+			return -ERR_CPU_TEMP_READ;
+		}
 		read_bytes += tmp;
+	}
+
+	if (read_bytes == 0) {
+		close(temp_fd);
+		temp_fd = -1;
+		return -ERR_CPU_TEMP_EMRD;
 	}
 
 	int res = 0, power = 1;
@@ -107,7 +112,11 @@ float cpu_temp(void) {
 	}
 
 #ifdef ENABLE_CACHE
-	lseek(temp_fd, 0, SEEK_SET);
+	if (lseek(temp_fd, 0, SEEK_SET) < 0) {
+		close(temp_fd);
+		temp_fd = -1;
+		return -ERR_CPU_TEMP_LSEK;
+	}
 #else
 	close(temp_fd);
 	temp_fd = -1;
