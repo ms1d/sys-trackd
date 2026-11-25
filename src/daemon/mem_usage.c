@@ -23,8 +23,12 @@ float mem_usage(void) {
 	while (read_bytes < INP_SIZE - 1) {
 		ssize_t tmp = read(stat_fd, inp + read_bytes, INP_SIZE - 1 - read_bytes);
 		if (tmp == 0) break;
-		if (errno == EINTR) continue;
-		if (tmp < 0) { perror("read"); close(stat_fd); stat_fd = -1; return -ERR_MEM_USAGE_READ; }
+		if (tmp < 0) {
+			if (errno == EINTR) continue;
+			perror("read");
+			close(stat_fd); stat_fd = -1;
+			return -ERR_MEM_USAGE_READ;
+		}
 		read_bytes += tmp;
 	}
 

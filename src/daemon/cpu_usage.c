@@ -1,4 +1,3 @@
-#include <asm-generic/errno-base.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -40,8 +39,8 @@ float cpu_usage(void) {
 		ssize_t tmp = read(stat_fd, inp + read_bytes, INP_SIZE - 1 - read_bytes);
 
 		if (tmp == 0) break;
-		if (errno == EINTR) continue;
 		if (tmp < 0) {
+			if (errno == EINTR) continue;
 			perror("read");
 			close(stat_fd);
 			stat_fd = -1;
