@@ -1,4 +1,4 @@
-#include <bits/time.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -21,7 +21,16 @@ int send_dat(int fd, const char* dat, const int len) {
 	int send_bytes = 0, res = 0;
 	while (send_bytes < len) {
 		int tmp = send(fd, dat + send_bytes, len - send_bytes, MSG_NOSIGNAL);
-		if (tmp <= 0) { perror("send"); res = -1; break; }
+		if (tmp == 0) {
+			res = -1;
+			break;
+		}
+		if (tmp < 0) {
+			if (errno == EINTR) continue;
+			perror("send");
+			res = -1;
+			break;
+		}
 		send_bytes += tmp;
 	}
 
@@ -29,9 +38,8 @@ int send_dat(int fd, const char* dat, const int len) {
 	return res;
 }
 
-int send_err(int fd, int dat) {
-	uint64_t buf_storage;
-	char *buf = (char*)&buf_storage + 3;
+int send_err(int fd, int32_t dat) {
+	char buf[5];
 	buf[0] = 1;
 	memcpy(buf + 1, &dat, 4);
 	return send_dat(fd, buf, 5);
@@ -61,7 +69,9 @@ int main(void) {
 	strcpy(addr.sun_path + 1, "sys_trackd");
 
 	if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
-		perror("bind"); return 2;
+		close(fd);
+		perror("bind");
+		return 2;
 	}
 
 	if (listen(fd, 5) == -1) {
@@ -70,7 +80,11 @@ int main(void) {
 
 	while(1) {
 		int client_fd = accept(fd, NULL, NULL);
-		if (client_fd < 0) break;
+		if (client_fd < 0) {
+			if (errno == EINTR) continue;
+			perror("accept");
+			break;
+		}
 
 		if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &t, sizeof(t)) < 0) {
 			perror("setsockopt SO_RCVTIMEO");
@@ -78,27 +92,30 @@ int main(void) {
 			continue;
 		}
 
-		uint32_t buf_storage;
-		char *buf = (char*)&buf_storage;
+		uint32_t in_buf_storage;
+		char *in_buf = (char*)&in_buf_storage;
 
 		{
 			int read_bytes = 0;
 			while (read_bytes < 4) {
-				int tmp = read(client_fd, buf + read_bytes, 4 - read_bytes);
+				int tmp = read(client_fd, in_buf + read_bytes, 4 - read_bytes);
 				if (tmp == 0) { send_err(client_fd, -ERR_BAD_LEN); break; }
-				if (tmp < 0) { send_err(client_fd, -ERR_READ); break; }
+				if (tmp < 0) {
+					if (errno == EINTR) continue;
+					send_err(client_fd, -ERR_READ);
+					break;
+				}
 				read_bytes += tmp;
 			}
 			
 			if (read_bytes != 4) continue;
 		}
 
-		uint64_t out_storage;
-		char *out = (char*)&out_storage + 3; float res;
+		float res;
 #ifdef MEASURE_TIME
 		clock_gettime(CLOCK_MONOTONIC, &start);
 #endif
-		switch (*(int*)buf) {
+		switch (in_buf_storage) {
 			case OPT_CPU_USAGE:
 				res = cpu_usage(); break;
 			case OPT_MEM_USAGE:
@@ -114,18 +131,20 @@ int main(void) {
 		clock_gettime(CLOCK_MONOTONIC, &end);
 #endif
 
+		char out_buf[5];
+
 		if (res < 0) { 
-			out[0] = 1;
-			int res_int = (int)res;
-			memcpy(out + 1, &res_int, 4);
-			fprintf(stderr, "err byte set to %d after operation %d\n", *(int*)(out+1), *(int*)buf);
+			out_buf[0] = 1;
+			int32_t res_int = (int32_t)res;
+			memcpy(out_buf + 1, &res_int, 4);
+			fprintf(stderr, "err byte set to %d after operation %u\n", (int32_t)res, in_buf_storage);
 		}
 		else {
-			out[0] = 0;
-			memcpy(out + 1, &res, 4);
+			out_buf[0] = 0;
+			memcpy(out_buf + 1, &res, 4);
 		}
 		
-		if (send_dat(client_fd, out, 5) < 0) { perror("send"); break; }
+		if (send_dat(client_fd, out_buf, 5) < 0) { perror("send"); break; }
 #ifdef MEASURE_TIME
 		printf("%lu\n", end.tv_nsec - start.tv_nsec);
 #endif
