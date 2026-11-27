@@ -7,12 +7,13 @@ file(GLOB C_SOURCES src/client/*.c)
 
 add_executable(sys-trackd ${D_SOURCES})
 add_executable(sys-track ${C_SOURCES})
+
 target_include_directories(sys-trackd PUBLIC include)
 target_compile_options(
 	sys-trackd
 	PRIVATE
 	-g -O3 -Wall -Wextra -Wpedantic -Werror
-	-DENABLE_CACHE -DCPU_USAGE_INTERVAL=1
+	-DENABLE_CACHE -DCPU_USAGE_INTERVAL=1 -DMEASURE_TIME
 )
 
 target_include_directories(sys-track PUBLIC include)

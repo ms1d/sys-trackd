@@ -1,3 +1,4 @@
+#include <bits/time.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,6 +10,9 @@
 #include "cpu_temp.h"
 #include "cpu_freq.h"
 #include "codes.h"
+#ifdef MEASURE_TIME
+#include <time.h>
+#endif
 
 
 
@@ -34,6 +38,9 @@ int send_err(int fd, int dat) {
 
 
 int main(void) {
+#ifdef MEASURE_TIME
+	static struct timespec start = {0}, end = {0};
+#endif
 	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	struct sockaddr_un addr;
 	memset(&addr, 0, sizeof(addr));
@@ -71,6 +78,9 @@ int main(void) {
 
 		uint64_t out_storage;
 		char *out = (char*)&out_storage + 3; float res;
+#ifdef MEASURE_TIME
+		clock_gettime(CLOCK_MONOTONIC, &start);
+#endif
 		switch (*(int*)buf) {
 			case OPT_CPU_USAGE:
 				res = cpu_usage(); break;
@@ -83,6 +93,9 @@ int main(void) {
 			default:
 				res = -ERR_BAD_OPT; break;
 		}
+#ifdef MEASURE_TIME
+		clock_gettime(CLOCK_MONOTONIC, &end);
+#endif
 
 		if (res < 0) { 
 			out[0] = 1;
@@ -96,6 +109,9 @@ int main(void) {
 		}
 		
 		if (send_dat(client_fd, out, 5) < 0) { perror("send"); break; }
+#ifdef MEASURE_TIME
+		printf("%lu\n", end.tv_nsec - start.tv_nsec);
+#endif
 	}
 
 	close(fd);
