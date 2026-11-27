@@ -1,9 +1,5 @@
 #pragma once
 
-#ifndef CPU_USAGE_INTERVAL
-#define CPU_USAGE_INTERVAL 1
-#endif
-
 // Error codes for cpu_usage:
 
 // General error code
@@ -26,6 +22,15 @@
 #define ERR_CPU_USAGE_OUT 6
 
 // need a second sample to record results. call again
-#define ERR_CPU_USAGE_SAMPLE -7
+#define ERR_CPU_USAGE_INIT 7
+
+// cpu counters have not incremented since the last read
+#define ERR_CPU_USAGE_IDLE 8
+
+// lseek() errored when resetting fd
+#define ERR_CPU_USAGE_LSEK 9
+
+// Data gathered was invalid (either counters decreased OR time in idle > time total)
+#define ERR_CPU_USAGE_NVLD 10
 
 float cpu_usage(void);

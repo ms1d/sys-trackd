@@ -3,7 +3,6 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <time.h>
 #include <unistd.h>
 #include "cpu_usage.h"
 #include "parsers.h"
@@ -12,28 +11,18 @@ static int stat_fd = -1;
 
 
 float cpu_usage(void) {
-	// 1 - parse upto newline exclusive (char[1000] as buffer, check for overflow)
-	// 2 - repeatedly parse upto each space (10 fields, last 2 are VM specific, not necessary)
-	// 3 - sum = total time. 4th field = idle time
-	// 4 - usage = change in non-idle / change in total
 #define INP_SIZE 200
 #define OUT_LEN 8
-	static char inp[INP_SIZE] = {0};
-	static uint64_t out[8], old_total = 0, old_idle = 0;
-	static float old_res = 0;
-	static time_t old_t = 0;
+	static uint64_t old_total = 0, old_idle = 0;
+	static char initialised = 0;
 
 	if (stat_fd < 0) {
 		stat_fd = open("/proc/stat", O_RDONLY);
 		if (stat_fd < 0) { perror("open"); return -ERR_CPU_USAGE_OPEN; }
 	}
 
-	time_t new_t = time(NULL);
-	if (new_t - old_t < CPU_USAGE_INTERVAL) {
-		return old_res == 0 ? -ERR_CPU_USAGE_SAMPLE : old_res;
-	}
-	old_t = new_t;
-	
+	char inp[INP_SIZE] = {0};
+
 	int read_bytes = 0;
 	while (read_bytes < INP_SIZE - 1) {
 		ssize_t tmp = read(stat_fd, inp + read_bytes, INP_SIZE - 1 - read_bytes);
@@ -65,9 +54,11 @@ float cpu_usage(void) {
 		return -ERR_CPU_USAGE_STRT;
 	}
 
+	uint64_t out[OUT_LEN];
+
 	int out_index = 0;
-	while (buf_start < buf_end && out_index < OUT_LEN) {
-		const char *num_end = seek_char(buf_start, (int)(buf_end - buf_start), ' ');
+	while (buf_start != NULL && buf_start < buf_end && out_index < OUT_LEN) {
+		const char *num_end = seek_whitespace(buf_start, buf_end - buf_start);
 		if (num_end == NULL) num_end = buf_end;
 		const char *tmp = num_end;
 
@@ -79,7 +70,7 @@ float cpu_usage(void) {
 		}
 
 		out[out_index++] = num;
-		buf_start = num_end + 1;
+		buf_start = seek_not_whitespace(num_end, buf_end - num_end);
 	}
 
 	if (out_index != OUT_LEN) {
@@ -91,25 +82,70 @@ float cpu_usage(void) {
 	uint64_t total = 0, idle = out[3];
 	for (int i = 0; i < OUT_LEN; i++) total += out[i];
 
-	if (old_total == 0 || old_idle == 0) {
-		old_total = total; old_idle = idle; old_t = time(NULL);
-		lseek(stat_fd, 0, SEEK_SET);
-		return -ERR_CPU_USAGE_SAMPLE;
+	if (!initialised) {
+		old_total = total; old_idle = idle;
+		initialised = 1;
+#ifdef ENABLE_CACHE
+		if (lseek(stat_fd, 0, SEEK_SET) < 0) {
+			perror("lseek");
+			close(stat_fd);
+			stat_fd = -1;
+		}
+#else
+		close(stat_fd);
+		stat_fd = -1;
+#endif
+		return -ERR_CPU_USAGE_INIT;
 	}
 
 	uint64_t diff_total = total - old_total;
     uint64_t diff_idle = idle - old_idle;
+
+	if (diff_total == 0) {
+#ifdef ENABLE_CACHE
+		if (lseek(stat_fd, 0, SEEK_SET) < 0) {
+			perror("lseek");
+			close(stat_fd);
+			stat_fd = -1;
+		}
+#else
+		close(stat_fd);
+		stat_fd = -1;
+#endif
+
+		return -ERR_CPU_USAGE_IDLE;
+	}
+
+	if (diff_total < diff_idle || old_total > total || old_idle > idle) {
+		old_total = total; old_idle = idle;
+#ifdef ENABLE_CACHE
+		if (lseek(stat_fd, 0, SEEK_SET) < 0) {
+			perror("lseek");
+			close(stat_fd);
+			stat_fd = -1;
+		}
+#else
+		close(stat_fd);
+		stat_fd = -1;
+#endif
+
+		return -ERR_CPU_USAGE_NVLD;
+	}
+
     old_total = total; old_idle = idle;
 
 #ifdef ENABLE_CACHE
-	lseek(stat_fd, 0, SEEK_SET);
+	if (lseek(stat_fd, 0, SEEK_SET) < 0) {
+		perror("lseek");
+		close(stat_fd);
+		stat_fd = -1;
+		return -ERR_CPU_USAGE_LSEK;
+	}
 #else
 	close(stat_fd);
 	stat_fd = -1;
 #endif
-	old_res = 1 - (float)diff_idle / (float)diff_total;
-	return old_res;
-
+	return 1 - (float)diff_idle / (float)diff_total;
 #undef OUT_LEN
 #undef INP_SIZE
 }
