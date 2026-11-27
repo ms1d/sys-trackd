@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/time.h>
 #include "cpu_usage.h"
 #include "mem_usage.h"
 #include "cpu_temp.h"
@@ -42,6 +43,16 @@ int main(void) {
 	static struct timespec start = {0}, end = {0};
 #endif
 	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (fd < 0) {
+		perror("socket");
+		return 1;
+	}
+
+	struct timeval t = {
+		.tv_sec = 0,
+		.tv_usec = 2000
+	};
+	
 	struct sockaddr_un addr;
 	memset(&addr, 0, sizeof(addr));
 
@@ -50,16 +61,22 @@ int main(void) {
 	strcpy(addr.sun_path + 1, "sys_trackd");
 
 	if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
-		perror("bind"); return 1;
+		perror("bind"); return 2;
 	}
 
 	if (listen(fd, 5) == -1) {
-		perror("listen"); return 1;
+		perror("listen"); return 3;
 	}
 
 	while(1) {
 		int client_fd = accept(fd, NULL, NULL);
 		if (client_fd < 0) break;
+
+		if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &t, sizeof(t)) < 0) {
+			perror("setsockopt SO_RCVTIMEO");
+			close(client_fd);
+			continue;
+		}
 
 		uint32_t buf_storage;
 		char *buf = (char*)&buf_storage;
@@ -115,5 +132,5 @@ int main(void) {
 	}
 
 	close(fd);
-	return 1;
+	return 4;
 }
