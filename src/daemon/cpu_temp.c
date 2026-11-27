@@ -113,6 +113,7 @@ float cpu_temp(void) {
 
 #ifdef ENABLE_CACHE
 	if (lseek(temp_fd, 0, SEEK_SET) < 0) {
+		perror("lseek");
 		close(temp_fd);
 		temp_fd = -1;
 		return -ERR_CPU_TEMP_LSEK;
